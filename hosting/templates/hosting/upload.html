@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+{% load static %}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传项目 - web项目托管平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 悬停触发下拉菜单 */
+        .hover-dropdown:hover .dropdown-menu {
+            display: block;
+            margin-top: 0;
+        }
+        /* 隐藏下拉菜单按钮的小三角 */
+        .nav-item.dropdown .nav-link.dropdown-toggle::after {
+            display: none;
+        }
+        /* 通知消息容器 */
+        .notification-container {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1050;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        /* 通知消息样式 */
+        .alert {
+            padding: 20px 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            transition: all 0.5s ease;
+            font-size: 16px;
+            line-height: 1.6;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        /* 上传进度条样式 */
+        .progress {
+            height: 20px;
+            margin-top: 10px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        /* 上传状态提示 */
+        .upload-status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        /* 禁用按钮样式 */
+        .btn:disabled {
+            opacity: 0.65;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">web项目托管平台</a>
+            <div class="navbar-nav ms-auto">
+                {% if user.is_authenticated %}
+                    {% if user.profile.permission_level != 'guest' or user.is_superuser %}
+                        <div class="nav-item dropdown hover-dropdown">
+                            <a class="nav-link" href="#" id="userDropdown">
+                                {% if user.is_authenticated and request.unread_count > 0 %}
+                                    <span class="badge bg-danger me-1">{{ request.unread_count }}</span>
+                                {% endif %}
+                                <i class="fas fa-bell me-2"></i> 欢迎, {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'messages' %}"><i class="fas fa-envelope"></i> 消息中心 {% if user.is_authenticated and request.unread_count > 0 %}<span class="badge bg-danger ms-2">{{ request.unread_count }}</span>{% endif %}</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-user"></i> 个人资料</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-lock"></i> 账号安全</a></li>
+                                {% if user.profile.permission_level == 'admin' or user.is_superuser %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'user_management' %}"><i class="fas fa-users"></i> 用户管理</a></li>
+                                <li><a class="dropdown-item" href="{% url 'permission_logs' %}"><i class="fas fa-history"></i> 权限日志</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-question-circle"></i> 帮助中心</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-info-circle"></i> 关于平台</a></li>
+                            </ul>
+                        </div>
+                        <div class="nav-item dropdown hover-dropdown">
+                            <a class="nav-link" href="#" id="settingsDropdown">
+                                <i class="fas fa-cog"></i> 设置
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="settingsDropdown">
+                                {% if user.profile.can_upload or user.is_superuser %}
+                                <li><a class="dropdown-item" href="{% url 'upload_website' %}"><i class="fas fa-upload"></i> 上传项目</a></li>
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{% url 'my_projects' %}"><i class="fas fa-folder"></i> 我的项目</a></li>
+                            </ul>
+                        </div>
+                        <a class="nav-link" href="{% url 'logout' %}">退出</a>
+                    {% else %}
+                        <a class="nav-link" href="{% url 'login' %}">登录</a>
+                        <a class="nav-link" href="{% url 'register' %}">注册</a>
+                    {% endif %}
+                {% else %}
+                    <a class="nav-link" href="{% url 'login' %}">登录</a>
+                    <a class="nav-link" href="{% url 'register' %}">注册</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="notification-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <h2 class="mb-4">上传新项目</h2>
+
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">网站名称</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="text-danger">{{ form.name.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label for="{{ form.slug.id_for_label }}" class="form-label">网址标识 (URL)</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_slug" name="edit_slug">
+                                <label class="form-check-label" for="edit_slug">修改URL</label>
+                            </div>
+                        </div>
+                        {{ form.slug }}
+                        <div class="form-text">将用于访问您的网站，例如: /site/my-website/</div>
+                        {% if form.slug.errors %}
+                            <div class="text-danger">{{ form.slug.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">网站描述</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">{{ form.description.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.upload_file.id_for_label }}" class="form-label">选择文件 (.zip 或 .7z)</label>
+                        {{ form.upload_file }}
+                        <div class="form-text">支持 zip 和 7z 格式，文件最大 500MB</div>
+                        {% if form.upload_file.errors %}
+                            <div class="text-danger">{{ form.upload_file.errors }}</div>
+                        {% endif %}
+                        <!-- 上传进度条 -->
+                        <div id="upload-progress" class="progress d-none">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <!-- 上传状态 -->
+                        <div id="upload-status" class="upload-status d-none"></div>
+                    </div>
+
+                    <button type="submit" id="upload-btn" class="btn btn-primary">上传并发布</button>
+                    <a href="/" class="btn btn-secondary">取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 自动隐藏通知消息
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    alert.style.transform = 'translateY(-20px)';
+                    alert.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    setTimeout(() => {
+                        alert.remove();
+                    }, 500);
+                }, 3000); // 3秒后开始隐藏
+            });
+        });
+    </script>
+    <script>
+        // 页面加载时，设置网址标识输入框为只读
+        document.addEventListener('DOMContentLoaded', function() {
+            const slugInput = document.getElementById('id_slug');
+            const editCheckbox = document.getElementById('edit_slug');
+            
+            // 默认设置为只读
+            slugInput.readOnly = true;
+            
+            // 监听修改URL复选框的变化
+            editCheckbox.addEventListener('change', function() {
+                slugInput.readOnly = !this.checked;
+            });
+        });
+        
+        // 当用户选择文件时，自动填充网址标识
+        document.getElementById('id_upload_file').addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                // 获取文件名
+                let filename = this.files[0].name;
+                // 移除文件扩展名
+                let slug = filename.replace(/\.[^/.]+$/, '');
+                // 替换空格为连字符，移除特殊字符
+                slug = slug.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                // 填充到网址标识输入框
+                document.getElementById('id_slug').value = slug;
+            }
+        });
+    </script>
+    <script>
+        // 文件上传进度显示
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const uploadBtn = document.getElementById('upload-btn');
+            const progressBar = document.getElementById('upload-progress');
+            const progressBarInner = progressBar.querySelector('.progress-bar');
+            const uploadStatus = document.getElementById('upload-status');
+            
+            // 移除阻止默认提交的事件监听器，使用表单的默认提交行为
+            // 这样可以避免XMLHttpRequest的CSRF问题
+        });
+    </script>
+</body>
+</html>

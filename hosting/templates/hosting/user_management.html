@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+{% load static %}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - web项目托管平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 悬停触发下拉菜单 */
+        .hover-dropdown:hover .dropdown-menu {
+            display: block;
+            margin-top: 0;
+        }
+        /* 隐藏下拉菜单按钮的小三角 */
+        .nav-item.dropdown .nav-link.dropdown-toggle::after {
+            display: none;
+        }
+        /* 通知消息容器 */
+        .notification-container {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1050;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        /* 通知消息样式 */
+        .alert {
+            padding: 20px 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            transition: all 0.5s ease;
+            font-size: 16px;
+            line-height: 1.6;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">web项目托管平台</a>
+            <div class="navbar-nav ms-auto">
+                {% if user.is_authenticated %}
+                    {% if user.profile.permission_level != 'guest' or user.is_superuser %}
+                        <div class="nav-item dropdown hover-dropdown">
+                            <a class="nav-link" href="#" id="userDropdown">
+                                {% if user.is_authenticated and request.unread_count > 0 %}
+                                    <span class="badge bg-danger me-1">{{ request.unread_count }}</span>
+                                {% endif %}
+                                <i class="fas fa-bell me-2"></i> 欢迎, {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'messages' %}"><i class="fas fa-envelope"></i> 消息中心 {% if user.is_authenticated and request.unread_count > 0 %}<span class="badge bg-danger ms-2">{{ request.unread_count }}</span>{% endif %}</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-user"></i> 个人资料</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-lock"></i> 账号安全</a></li>
+                                {% if user.profile.permission_level == 'admin' or user.is_superuser %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'user_management' %}"><i class="fas fa-users"></i> 用户管理</a></li>
+                                <li><a class="dropdown-item" href="{% url 'permission_logs' %}"><i class="fas fa-history"></i> 权限日志</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-question-circle"></i> 帮助中心</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-info-circle"></i> 关于平台</a></li>
+                            </ul>
+                        </div>
+                        <div class="nav-item dropdown hover-dropdown">
+                            <a class="nav-link" href="#" id="settingsDropdown">
+                                <i class="fas fa-cog"></i> 设置
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="settingsDropdown">
+                                {% if user.profile.can_upload or user.is_superuser %}
+                                <li><a class="dropdown-item" href="{% url 'upload_website' %}"><i class="fas fa-upload"></i> 上传项目</a></li>
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{% url 'my_projects' %}"><i class="fas fa-folder"></i> 我的项目</a></li>
+                            </ul>
+                        </div>
+                        <a class="nav-link" href="{% url 'logout' %}">退出</a>
+                    {% else %}
+                        <a class="nav-link" href="{% url 'login' %}">登录</a>
+                        <a class="nav-link" href="{% url 'register' %}">注册</a>
+                    {% endif %}
+                {% else %}
+                    <a class="nav-link" href="{% url 'login' %}">登录</a>
+                    <a class="nav-link" href="{% url 'register' %}">注册</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="notification-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    <div class="container mt-5">
+        <h2 class="mb-4">用户管理</h2>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>用户名</th>
+                            <th>邮箱</th>
+                            <th>权限级别</th>
+                            <th>登录状态</th>
+                            <th>是否超级用户</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>
+                                    {% if user.profile %}
+                                        {{ user.profile.get_permission_level_display }}
+                                    {% else %}
+                                        游客
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.id in active_user_ids %}
+                                        <span class="badge bg-success">在线</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">离线</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if user.is_superuser %}
+                                        <span class="badge bg-success">是</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if not user.is_superuser %}
+                                        <a href="{% url 'user_edit' user.id %}" class="btn btn-sm btn-primary">编辑</a>
+                                        {% if user.username != 'guest' %}
+                                            <a href="{% url 'user_delete' user.id %}" class="btn btn-sm btn-danger">删除</a>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">不可编辑</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 自动隐藏通知消息
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    alert.style.transform = 'translateY(-20px)';
+                    alert.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    setTimeout(() => {
+                        alert.remove();
+                    }, 500);
+                }, 3000); // 3秒后开始隐藏
+            });
+        });
+    </script>
+
+    <!-- 版本信息 -->
+    <div class="fixed-bottom bg-white border-top py-2">
+        <div class="container text-center">
+            <p class="mb-0 text-dark">web项目托管平台 v1.6.0</p>
+            <p class="text-muted small">© 2026 web项目托管平台</p>
+        </div>
+    </div>
+</body>
+</html>
