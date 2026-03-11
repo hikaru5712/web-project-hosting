@@ -212,6 +212,11 @@ def serve_website(request, slug, path=''):
                 base_tag = f'<base href="{base_url}">'
                 content = content[:head_end] + base_tag + content[head_end:]
 
+            # 处理绝对路径的资源引用，将 /assets/ 和 /libs/ 等路径改为相对路径
+            import re
+            # 替换绝对路径的资源引用
+            content = re.sub(r'(src|href)="/(assets|libs|vite\.svg)', r'\1="./\2', content)
+
             # 返回修改后的内容
             from django.http import HttpResponse
             response = HttpResponse(content, content_type='text/html; charset=utf-8')
